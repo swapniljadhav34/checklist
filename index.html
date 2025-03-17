@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JSON Validator – Optimized with Hover Popup (Updated Universal & RC Conditions)</title>
+    <!-- Include Bootstrap CSS for dynamic/responsive tables -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      /* Top Bar */
+      .top-bar { background-color: #c0c0c0; padding: 5px; margin-bottom: 10px; }
+      .top-bar table { width: 100%; border-collapse: collapse; }
+      .top-bar td { border: none; padding: 0; vertical-align: middle; }
+      /* Section styling */
+      .section { background-color: #efefef; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; }
+      .section-title { font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+      /* Bootstrap Table Overrides */
+      .table-responsive { margin-bottom: 10px; }
+      table { box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+      table th, table td { border: 1px solid #ddd; padding: 5px; vertical-align: top; }
+      table th { background-color: #f2f2f2;border-top-left-radius: 8px; border-top-right-radius: 8px; }
+      /* Table color themes */
+      table.product-table { background-color: #c9d7de !important; }
+      table.sampling-table { background-color: #c4b7cd !important; }
+      table.analysis-table { background-color: #cedbc2 !important; }
+      table.components-table { background-color: #e4d5b3 !important; }
+      /* Add a soft inset shadow for table cells */
+      table td, table th { box-shadow: inset 0 0 5px rgba(0,0,0,0.1); }
+      /* Field container & popup styling */
+      .field-container { position: relative; display: inline-block; cursor: pointer; }
+      .field-popup { visibility: hidden; background-color: #fff; color: #333; padding: 3px; border: 1px solid #ccc; border-radius: 3px; position: absolute; z-index: 10; bottom: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap; box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.444); }
+      .field-container:hover .field-popup { visibility: visible; }
+      /* Updated arrow (icon) styling: dark background, rounded corners */
+      
+      .valid { cursor: pointer; }
+      .invalid { cursor: pointer; }
+      h6 { margin: 0; }
+      .error-message { margin-top: 5px; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <h2>Upload JSON File</h2>
+    <input type="file" id="jsonFileInput" /><br /><br />
+    <div id="reportContainer" style="display:none;"></div>
+    
+    <script>
+      /****************************************************
+       * 1) Normalization & Numeric Prefix Functions
+       ****************************************************/
+      function normalizeComponentName(name) {
+        if (!name) return "";
+        return name.replace(/^[\d\.\)\-\s:\#]+/, "").trim().toLowerCase();
+      }
+      function getNumericPrefix(name) {
+        if (!name) return "";
+        var match = name.match(/^(\d+)[\.\)\-\s:\#]*/);
+        return match ? match[1] : "";
+      }
+      function extractTargetPotency(text) {
+        var match = text.match(/(\d+)\s*-\s*Target potency/i);
+        return match ? parseInt(match[1], 10) : null;
+      }
+      function extractCU(text) {
+        var match = text.match(/CU[:\s]+(\d+(\.\d+)?)/i);
+        return match ? parseFloat(match[1]) : null;
+      }
+      // New helper: extract first numeric value from a text.
+      function extractNumericFromDescription(text) {
+        var match = text.match(/(\d+(?:\.\d+)?)/);
+        return match ? match[1] : "";
+      }
+      
+      /*****************************************
+       * 2) Constant Definitions for CU & Dissolution
+       *****************************************/
+       var cudicConstants = {
+        "CULCA02Q": [
+          {
+            "comcu_ComponentDisplay": "1-Target potency",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": "1.00",
+            "comcu_units": "PERCENT",
+            "comcu_round": "N",
+            "comcu_reportability": "",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "100.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-Status",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "15.00",
+            "comcu_dissCUMaximum": "25.00",
+            "comcu_appendResult": "No",
+            "comcu_places": "1.00",
+            "comcu_units": "NONE",
+            "comcu_round": "N",
+            "comcu_reportability": "",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "100.00"
+          }
+        ],
+        "CULCS01Q": [
+          {
+            "comcu_ComponentDisplay": "Status of All Stages",
+            "comcu_ruleTranslation": "FAIL",
+            "comcu_classTranslation": "Result",
+            "comcu_typeTranslation": "Text",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": null,
+            "comcu_units": "NONE",
+            "comcu_round": null,
+            "comcu_reportability": "None",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "100.00"
+          },
+          {
+            "comcu_ComponentDisplay": "Current Stage",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Text",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": null,
+            "comcu_units": "NONE",
+            "comcu_round": null,
+            "comcu_reportability": "None",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "100.00"
+          }
+        ],
+        "CULCE03Q": [
+          {
+            "comcu_ComponentDisplay": "1-Mean",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Overall Mean",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "PERCENT",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "SD of location means",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Between location SD",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "NONE",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-SE",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Within location SD",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "NONE",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-Minimum",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Minimum",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "PERCENT",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-Maximum",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Maximum",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "PERCENT",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-#Results outside 75.0%-125.0% of claim",
+            "comcu_ruleTranslation": "Result <= 0",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": "0.00",
+            "comcu_units": "NONE",
+            "comcu_round": "D",
+            "comcu_reportability": "",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-Overall Status",
+            "comcu_ruleTranslation": "Not Equal to Does not comply",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Text",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": null,
+            "comcu_units": "NONE",
+            "comcu_round": null,
+            "comcu_reportability": "None",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "Status for all actives",
+            "comcu_ruleTranslation": "Not Equal to Does not comply",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Text",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": null,
+            "comcu_units": "NONE",
+            "comcu_round": null,
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "1-SD",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Numeric",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "Overall SD",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "Yes",
+            "comcu_places": "1.00",
+            "comcu_units": "NONE",
+            "comcu_round": "D",
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          },
+          {
+            "comcu_ComponentDisplay": "Tier",
+            "comcu_ruleTranslation": "",
+            "comcu_classTranslation": "All Result",
+            "comcu_typeTranslation": "Text",
+            "comcu_requiredTranslation": "Yes",
+            "comcu_description": "",
+            "comcu_activeComponent": "No",
+            "comcu_reportedName": "",
+            "comcu_componentReportable": "",
+            "comcu_compOptional": "",
+            "comcu_hiControl1": "",
+            "comcu_loControl1": "",
+            "comcu_comments": "",
+            "comcu_dissCUMinimum": "0.00",
+            "comcu_dissCUMaximum": "0.00",
+            "comcu_appendResult": "No",
+            "comcu_places": null,
+            "comcu_units": "NONE",
+            "comcu_round": null,
+            "comcu_reportability": "Always Display",
+            "comcu_formula": "",
+            "comcu_nominalValue": "0.00",
+            "comcu_cuTargetValue": "0.00"
+          }
+        ]
+      };
+      
+      var dissicConstants = {
+        "DISSOA00A": [
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Numeric",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "Status",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "80.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_loControll": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "Yes",
+            "comdiss_places": "0.00",
+            "comdiss_units": "NONE",
+            "comdiss_round": "D",
+            "comdiss_reportability": "",
+            "comdiss_formula": "",
+            "comdiss_stage": "No",
+            "comdiss_ComponentDisplay": "Status",
+            "comdiss_nominalValue": "0.00"
+          },
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Numeric",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "%RSD",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "0.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_loControll": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "Yes",
+            "comdiss_places": "0.00",
+            "comdiss_units": "PERCENT",
+            "comdiss_round": "D",
+            "comdiss_reportability": "Always Show",
+            "comdiss_formula": "",
+            "comdiss_stage": "No",
+            "comdiss_ComponentDisplay": "% RSD",
+            "comdiss_nominalValue": "0.00"
+          },
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Numeric",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "Mean",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "0.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_loControll": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "Yes",
+            "comdiss_places": "0.00",
+            "comdiss_units": "PERCENT",
+            "comdiss_round": "D",
+            "comdiss_reportability": "Always Show",
+            "comdiss_formula": "",
+            "comdiss_stage": "No",
+            "comdiss_ComponentDisplay": "Mean",
+            "comdiss_nominalValue": "0.00"
+          },
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Numeric",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "Min",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "0.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_loControll": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "Yes",
+            "comdiss_places": "0.00",
+            "comdiss_units": "PERCENT",
+            "comdiss_round": "D",
+            "comdiss_reportability": "Always Show",
+            "comdiss_formula": "",
+            "comdiss_stage": "No",
+            "comdiss_ComponentDisplay": "Minimum",
+            "comdiss_nominalValue": "0.00"
+          },
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Numeric",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "Max",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "0.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_loControll": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "Yes",
+            "comdiss_places": "0.00",
+            "comdiss_units": "PERCENT",
+            "comdiss_round": "D",
+            "comdiss_reportability": "Always Show",
+            "comdiss_formula": "",
+            "comdiss_stage": "No",
+            "comdiss_ComponentDisplay": "Maximum",
+            "comdiss_nominalValue": "0.00"
+          }
+        ],
+        "DISSOS00A": [
+          {
+            "comdiss_ruleTranslation": "Not Equal to FAIL",
+            "comdiss_classTranslation": "All Result",
+            "comdiss_typeTranslation": "Text",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_hiControl1": "",
+            "comdiss_loControl1": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "No",
+            "comdiss_places": null,
+            "comdiss_units": "NONE",
+            "comdiss_round": null,
+            "comdiss_reportability": "",
+            "comdiss_formula": "",
+            "comdiss_stage1": "No",
+            "comdiss_ComponentDisplay": "Status of All Stages/Levels",
+            "comdiss_nominalValue": "0.00"
+          },
+          {
+            "comdiss_ruleTranslation": "",
+            "comdiss_classTranslation": "Result",
+            "comdiss_typeTranslation": "Text",
+            "comdiss_requiredTranslation": "Yes",
+            "comdiss_description": "",
+            "comdiss_activeComponent": "No",
+            "comdiss_reportedName": "",
+            "comdiss_componentReportable": "",
+            "comdiss_compOptional": "",
+            "comdiss_qValue": "0.00",
+            "comdiss_dissCUMinimum": "0.00",
+            "comdiss_dissCUMaximum": "0.00",
+            "comdiss_stage2": "No",
+            "comdiss_pooled": "No",
+            "comdiss_hiControl1": "",
+            "comdiss_loControl1": "",
+            "comdiss_comments": "",
+            "comdiss_appendResult": "No",
+            "comdiss_places": null,
+            "comdiss_units": "NONE",
+            "comdiss_round": null,
+            "comdiss_reportability": "Internal report only",
+            "comdiss_formula": "",
+            "comdiss_stage1": "No",
+            "comdiss_ComponentDisplay": "Current Stage/Level",
+            "comdiss_nominalValue": "0.00"
+          }
+        ]
+      };
+     
+      
+      /*****************************
+       * 3) Basic Utility Functions
+       *****************************/
+      function isValidField(value) {
+        return value !== "" && value !== null && value !== "N/A";
+      }
+      function isNumeric(n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+      function compareValues(actual, expected, caseInsensitive) {
+        if (isNumeric(actual) && isNumeric(expected)) {
+          return parseFloat(actual) === parseFloat(expected);
+        }
+        if (caseInsensitive) {
+          return (actual + "").trim().toLowerCase() === (expected + "").trim().toLowerCase();
+        }
+        return (actual + "").trim() === (expected + "").trim();
+      }
+      function getValidationMark(isValid, expVal) {
+        if (!expVal) return "";
+        return isValid
+          ? "<span class='field-icon valid' onclick='toggleValidation(event)'>✔️</span>"
+          : "<span class='field-icon invalid' onclick='toggleValidation(event)'>❌</span>";
+      }
+      
+      /************************************************************
+       * 4) Product & Sampling Builders (Safe Access to JSON)
+       ************************************************************/
+      function getCategoryAndVariable(prTitle) {
+        var match = prTitle.match(/^([A-Z]+)-([A-Z]+)-(\d+)([XQ]?)\b/);
+        return { category: match ? match[2] : "", variable: match ? match[4] : "" };
+      }
+      function createActualProduct(jsonData) {
+        var productObj = jsonData.pr_product || {};
+        var prTitle = jsonData.pr_title || "";
+        var catVar = getCategoryAndVariable(prTitle);
+        return {
+          pr_title: prTitle,
+          pr_version: jsonData.pr_version || "",
+          pr_code: productObj.pr_code || "",
+          pr_owner: productObj.pr_owner || "",
+          pr_group: productObj.pr_group || "",
+          pr_controlled: productObj.pr_controlled || "",
+          pr_hazardClass: productObj.pr_hazardClass || "",
+          pr_comments: productObj.pr_comments || "",
+          pr_tableType: productObj.pr_tableType || "",
+          category: catVar.category,
+          variable: catVar.variable
+        };
+      }
+      function createExpectedProduct(jsonData) {
+        var productObj = jsonData.pr_product || {};
+        var prTitle = jsonData.pr_title || "";
+        var catVar = getCategoryAndVariable(prTitle);
+        var tableTypeMapping = { FP: "Finished Product", RM: "Raw Material", ST: "Stability", PO: "Process Optimization", HT: "HOLD TIME", SA: "Stratified", QC: "General" };
+        var ownerGroupMapping = { X: { pr_owner: "RESEARCH-QA", pr_group: "DEVELOPMENT" }, Q: { pr_owner: "Peoples Group", pr_group: "Quality Group" } };
+        return {
+          pr_title: prTitle,
+          pr_version: jsonData.pr_version || "",
+          pr_code: productObj.pr_code || "",
+          pr_owner: ownerGroupMapping[catVar.variable] ? ownerGroupMapping[catVar.variable].pr_owner : "Error",
+          pr_group: ownerGroupMapping[catVar.variable] ? ownerGroupMapping[catVar.variable].pr_group : "Error",
+          pr_controlled: "No",
+          pr_hazardClass: "KDK",
+          pr_comments: productObj.pr_comments || "",
+          pr_tableType: tableTypeMapping[catVar.category] || "Error",
+          category: catVar.category,
+          variable: catVar.variable
+        };
+      }
+      function createActualSamplingPoint(jsonData) {
+        var sp = jsonData.samplingPoint || {};
+        return {
+          sp_point: sp.sp_point || "",
+          sp_grade: sp.sp_grade || "",
+          sp_description: sp.sp_description || "",
+          sp_continueChecking: sp.sp_continueChecking || "",
+          sp_alwaysCheck: sp.sp_alwaysCheck || "",
+          sp_storagePrecautions: sp.sp_storagePrecautions || "",
+          sp_comments: sp.sp_comments || ""
+        };
+      }
+      function createExpectedSamplingPoint(jsonData, category) {
+        var sp = jsonData.samplingPoint || {};
+        var expectedStorage = sp.sp_storagePrecautions || "";
+        if (category === "ST") { expectedStorage = "NONE"; }
+        else if (category === "FP") { expectedStorage = isValidField(sp.sp_storagePrecautions) ? sp.sp_storagePrecautions : "Provided"; }
+        return {
+          sp_point: sp.sp_point || "",
+          sp_grade: sp.sp_grade || "",
+          sp_description: sp.sp_description || "",
+          sp_continueChecking: "No",
+          sp_alwaysCheck: " No",
+          sp_storagePrecautions: expectedStorage,
+          sp_comments: sp.sp_comments || ""
+        };
+      }
+      
+      /********************************************************
+       * 5) Analysis & Component (Safe Checking)
+       ********************************************************/
+      function createActualAnalysis(analysis) { return analysis; }
+      // Helper: Map CU component using full keys.
+      function mapCuComponent(comp, analysisCode) {
+        var key = null;
+        if (analysisCode.startsWith("CULCA")) { key = "CULCA02Q"; }
+        else if (analysisCode.startsWith("CULCS")) { key = "CULCS01Q"; }
+        else if (analysisCode.startsWith("CULCE")) { key = "CULCE03Q"; }
+        else if (analysisCode.startsWith("CULCD")) { key = "CULCD01Q"; }
+        if (key && cudicConstants.hasOwnProperty(key)) {
+          var arr = cudicConstants[key];
+          var norm = normalizeComponentName(comp.comcu_ComponentDisplay);
+          var found = arr.find(function(item) { return normalizeComponentName(item.comcu_ComponentDisplay) === norm; });
+          return found;
+        }
+        return null;
+      }
+      // Global variable to hold the expected ruleTranslation from the "Max Uncle" component.
+      var globalMaxUncleRule = "";
+      
+      // Function to remove technical prefixes from keys when displaying
+      function stripPrefix(key) {
+        var prefixes = ["comtxt_", "comnum_", "comcu_", "comrc_", "comdiss_"];
+        for (var i = 0; i < prefixes.length; i++) {
+          if (key.indexOf(prefixes[i]) === 0) {
+            return key.substring(prefixes[i].length);
+          }
+        }
+        return key;
+      }
+      
+      function createExpectedAnalysis(analysis, category, variable) {
+        var expected = Object.assign({}, analysis);
+        if (!isValidField(analysis.ana_analysisRepName)) { expected.ana_analysisRepName = "Error: Mandatory field missing"; }
+        if (!isValidField(analysis.ana_analysis)) { expected.ana_analysis = "Error: Mandatory field missing"; }
+        if (!isValidField(analysis.ana_batchTestTemplate)) { expected.ana_batchTestTemplate = "Error: Mandatory field missing"; }
+      
+        if (analysis.component && Array.isArray(analysis.component)) {
+          expected.component = analysis.component.map(function(comp) {
+            return createExpectedComponent(comp, variable, analysis.ana_analysis);
+          });
+      
+          var repNameUpper = (analysis.ana_analysisRepName || "").trim().toUpperCase();
+          if (repNameUpper === "IDENTIFICATION" || repNameUpper === "DESCRIPTION") {
+            expected.component = expected.component.map(function(comp) {
+              if ("comtxt_reportedName" in comp && "comtxt_description" in comp) {
+                comp.comtxt_reportedName = comp.comtxt_description;
+              }
+              return comp;
+            });
+          }
+          if (repNameUpper.indexOf("DISSOLUTION") !== -1) {
+            expected.component.sort(function(a, b) {
+              var aIsDiss = (a.hasOwnProperty("comdiss_ComponentDisplay") || a.hasOwnProperty("comdiss_componentDisplay")) ? 0 : 1;
+              var bIsDiss = (b.hasOwnProperty("comdiss_ComponentDisplay") || b.hasOwnProperty("comdiss_componentDisplay")) ? 0 : 1;
+              return aIsDiss - bIsDiss;
+            });
+          }
+          // Extract globalMaxUncleRule from any RC component whose display contains "max uncle"
+          expected.component.forEach(function(comp) {
+            if (comp.hasOwnProperty("comrc_ComponentDisplay") &&
+                comp.comrc_ComponentDisplay.toLowerCase().indexOf("max uncle") !== -1) {
+              globalMaxUncleRule = comp.comrc_ruleTranslation || "";
+            }
+          });
+          // For RC components with "1-peak", if globalMaxUncleRule is available, set expected ruleTranslation to it.
+          expected.component.forEach(function(comp) {
+            if (comp.hasOwnProperty("comrc_ComponentDisplay") &&
+                comp.comrc_ComponentDisplay.toLowerCase().indexOf("1-peak") !== -1 &&
+                globalMaxUncleRule !== "") {
+              comp.comrc_ruleTranslation = globalMaxUncleRule;
+              comp.comrc_syntheticImpurity = "No";
+            }
+          });
+          // RC rule: Force comrc_thesholdFormatted to empty string when comrc_ComponentDisplay is "Max Uncle" or "Complete impurity" (case‑insensitive)
+          expected.component.forEach(function(comp) {
+            if (comp.hasOwnProperty("comrc_ComponentDisplay")) {
+              var disp = comp.comrc_ComponentDisplay.toLowerCase();
+              if (disp === "max uncle" || disp === "complete impurity") {
+                comp.comrc_thesholdFormatted = "";
+              }
+            }
+          });
+        } else {
+          expected.component = [];
+        }
+      
+        var anaAnalysis = (analysis.ana_analysis || "");
+        var codePrefix = null;
+        if (anaAnalysis.startsWith("CULCA")) { codePrefix = "CULCA02Q"; }
+        else if (anaAnalysis.startsWith("CULCS")) { codePrefix = "CULCS01Q"; }
+        else if (anaAnalysis.startsWith("CULCE")) { codePrefix = "CULCE03Q"; }
+        else if (anaAnalysis.startsWith("CULCD")) { codePrefix = "CULCD01Q"; }
+        if (codePrefix && cudicConstants.hasOwnProperty(codePrefix)) {
+          var requiredComps = cudicConstants[codePrefix];
+          var requiredNames = requiredComps.map(function(rc) { return normalizeComponentName(rc.comcu_ComponentDisplay); });
+          var actualNames = [];
+          if (analysis.component && Array.isArray(analysis.component)) {
+            actualNames = analysis.component
+              .filter(function(c) { return c.comcu_ComponentDisplay; })
+              .map(function(c) { return normalizeComponentName(c.comcu_ComponentDisplay); });
+          }
+          var missing = requiredNames.filter(function(rn) { return actualNames.indexOf(rn) === -1; });
+          if (missing.length > 0) {
+            expected.missingComponentsError = "<h6 style='color: red;'>Error: Missing mandatory component(s): " + missing.join(", ") + "</h6>";
+          }
+        }
+      
+        // Dissolution mapping.
+        if ((analysis.ana_analysisRepName || "").toUpperCase().indexOf("DISSOLUTION") !== -1) {
+          if (/^DISSOS/i.test(anaAnalysis)) { codePrefix = "DISSOS00A"; }
+          else if (/^DISSOA/i.test(anaAnalysis)) { codePrefix = "DISSOA00A"; }
+          if (codePrefix && dissicConstants.hasOwnProperty(codePrefix)) {
+            if (analysis.component && analysis.component.length > 0) {
+              var requiredDissComps = dissicConstants[codePrefix];
+              var requiredNamesDiss = requiredDissComps.map(function(rc) { return normalizeComponentName(rc.comdiss_ComponentDisplay); });
+              var actualNamesDiss = analysis.component
+                .filter(function(c) { return c.comdiss_ComponentDisplay || c.comdiss_componentDisplay; })
+                .map(function(c) { return normalizeComponentName(c.comdiss_ComponentDisplay || c.comdiss_componentDisplay); });
+              var missingDiss = requiredNamesDiss.filter(function(rn) { return actualNamesDiss.indexOf(rn) === -1; });
+              if (missingDiss.length > 0) {
+                expected.missingComponentsError = "<h6 style='color: red;'>Error: Missing mandatory dissolution component(s): " + missingDiss.join(", ") + "</h6>";
+              }
+            }
+          }
+        }
+      
+        // Staging Specs rules.
+        if (anaAnalysis.startsWith("DISSOA")) { expected.ana_stagingSpecs = ""; }
+        else if (anaAnalysis.startsWith("DISSOS")) {
+          if (!isValidField(analysis.ana_stagingSpecs)) { expected.ana_stagingSpecs = "Error: Staging Specs should be on S"; }
+        }
+      
+        // Combined block for DISSOA.
+        if (anaAnalysis.startsWith("DISSOA") && expected.component.length > 0) {
+          expected.component.forEach(function(comp) {
+            if (comp.hasOwnProperty("comdiss_ComponentDisplay") || comp.hasOwnProperty("comdiss_componentDisplay")) {
+              if (category === "ST") {
+                comp.comdiss_reportability = "Swapnil Summary";
+                var disp = comp.comdiss_ComponentDisplay || comp.comdiss_componentDisplay;
+                if (normalizeComponentName(disp) === normalizeComponentName("% RSD")) {
+                  expected.missingComponentsError = (expected.missingComponentsError || "") +
+                    "<h6 style='color:red;'>Error: %RSD component is not required for ST</h6>";
+                }
+              }
+            }
+          });
+        }
+      
+        return expected;
+      }
+      
+      function createExpectedComponent(comp, variable, analysisCode) {
+        var expected = {};
+        var prefix = "";
+        if ("comtxt_ComponentDisplay" in comp) { prefix = "comtxt_"; }
+        else if ("comnum_componentDisplay" in comp) { prefix = "comnum_"; }
+        else if ("comcu_ComponentDisplay" in comp) { prefix = "comcu_"; }
+        else if ("comrc_ComponentDisplay" in comp) { prefix = "comrc_"; }
+        if ("comdiss_ComponentDisplay" in comp || "comdiss_componentDisplay" in comp) { prefix = "comdiss_"; }
+      
+        // Copy all properties.
+        for (var k in comp) { expected[k] = comp[k]; }
+      
+        if (prefix === "comtxt_" && (comp[prefix + "typeTranslation"] || "").toLowerCase() === "formula") {
+          var numericVal = extractNumericFromDescription(comp[prefix + "description"]);
+          expected[prefix + "formula"] = "specval=" + numericVal + "\\\"" + analysisCode + "\\\"\\nComp=\\\"" + comp[prefix + "ComponentDisplay"] + "\\\"";
+        }
+      
+        if (prefix === "comcu_" && comp.comcu_ComponentDisplay) {
+          expected.extractedPrefix = getNumericPrefix(comp.comcu_ComponentDisplay);
+          if (analysisCode && /^CULC/i.test(analysisCode)) {
+            var cuExpected = mapCuComponent(comp, analysisCode);
+            if (cuExpected) { for (var prop in cuExpected) { expected[prop] = cuExpected[prop]; } }
+          }
+        }
+      
+        if (prefix === "comdiss_" && analysisCode && (/^DISSOA/i.test(analysisCode) || /^DISSOS/i.test(analysisCode))) {
+          var dissKey = /^DISSOA/i.test(analysisCode) ? "DISSOA00A" : "DISSOS00A";
+          if (dissicConstants.hasOwnProperty(dissKey)) {
+            var arrDiss = dissicConstants[dissKey];
+            var normDiss = normalizeComponentName(comp.comdiss_ComponentDisplay || comp.comdiss_componentDisplay);
+            var found = arrDiss.find(function(item) { return normalizeComponentName(item.comdiss_ComponentDisplay) === normDiss; });
+            if (found) { for (var prop in found) { expected[prop] = found[prop]; } }
+          }
+        }
+      
+        // Global rule for RC components: if variable is "X", set classTranslation to "All Result"
+        if (prefix === "comrc_" && variable === "X") {
+          var classKey = prefix + "classTranslation";
+          if (!expected.hasOwnProperty(classKey) || expected[classKey] !== "All Result") {
+            expected[classKey] = "All Result";
+          }
+        }
+      
+        // RC-specific conditions.
+        if (prefix === "comrc_") {
+          if ((comp[prefix + "ComponentDisplay"] || "").toLowerCase().indexOf("1-peak") !== -1) {
+            expected[prefix + "description"] = "";
+            expected[prefix + "activeComponent"] = "Yes";
+            expected[prefix + "syntheticImpurity"] = "No";
+            if (globalMaxUncleRule !== "") { expected[prefix + "ruleTranslation"] = globalMaxUncleRule; }
+          }
+          expected[prefix + "requiredTranslation"] = "No";
+          if ((comp[prefix + "ComponentDisplay"] || "").toLowerCase().indexOf("1-peak") === -1) {
+            if ((("" + (comp[prefix + "description"] || "")).trim()) === "") {
+              expected[prefix + "reportability"] = "Raw Summary only";
+            }
+          }
+          if ((("" + (comp[prefix + "description"] || "")).trim()) !== "") {
+            expected[prefix + "reportability"] = "Always Show";
+          }
+          var repVal = ("" + (comp[prefix + "reportability"] || "")).trim().toLowerCase();
+          if ((("" + (comp[prefix + "description"] || "")).trim()) === "" &&
+              (repVal === "" || repVal === "raw summary only" || repVal === "none")) {
+            expected[prefix + "chemicalName"] = " ";
+          }
+          var synth = ("" + (comp[prefix + "syntheticImpurity"] || "")).trim().toUpperCase();
+          if (synth === "YES") {
+            expected[prefix + "popupMessage"] = "⚠️ Not calculated in total";
+          } else if (synth === "NO" &&
+                     (("" + (comp[prefix + "description"] || "")).trim()) === "" &&
+                     (["NONE", ""].indexOf((("" + (comp[prefix + "reportability"] || "")).trim()).toUpperCase()) !== -1)) {
+            expected[prefix + "popupMessage"] = "⚠️ Calculated in total but not displayed";
+          }
+          var compDisplay = (comp[prefix + "ComponentDisplay"] || "").toLowerCase();
+          if (compDisplay.indexOf("max uncle") !== -1 || compDisplay.indexOf("complete impurity") !== -1) {
+            expected[prefix + "reportedName"] = (globalMaxUncleRule !== "" ? globalMaxUncleRule : (compDisplay.indexOf("max uncle") !== -1 ? "Max Uncle" : "Total"));
+            expected[prefix + "tcName"] = "";
+            // Force comrc_thesholdFormatted to be blank.
+            expected[prefix + "thesholdFormatted"] = "";
+          } else {
+            var reported = comp[prefix + "reportedName"] || "";
+            var tcName = comp[prefix + "tcName"] || "";
+            if (reported === "" && tcName !== "") { expected[prefix + "reportedName"] = tcName; }
+            else if (tcName === "" && reported !== "") { expected[prefix + "tcName"] = reported; }
+            else if (reported === "" && tcName === "") {
+              expected[prefix + "reportedName"] = "Error: Both values empty";
+              expected[prefix + "tcName"] = "Error: Both values empty";
+            } else { expected[prefix + "reportedName"] = reported; expected[prefix + "tcName"] = reported; }
+          }
+          if ((comp[prefix + "typeTranslation"] || "").toLowerCase() === "numeric") {
+            expected[prefix + "round"] = "D";
+          }
+          if (comp.hasOwnProperty(prefix + "places") && ("" + (comp[prefix + "places"] || "")).trim() !== "") {
+            expected[prefix + "places"] = comp[prefix + "places"];
+          } else {
+            var desc = comp[prefix + "description"] || "";
+            var tokenRegex = /\b(?:LT|MT|NMT|NLT)\s*([\d]+(?:\.[\d]+)?)/i;
+            var tokenMatch = desc.match(tokenRegex);
+            if (tokenMatch) {
+              var numStr = tokenMatch[1];
+              var decimals = (numStr.indexOf('.') !== -1) ? numStr.split('.')[1].length : 0;
+              expected[prefix + "places"] = decimals;
+            } else {
+              var genericMatch = desc.match(/(\d+)(?:\.(\d+))?/);
+              if (genericMatch) {
+                var decimals = genericMatch[2] ? genericMatch[2].length : 0;
+                expected[prefix + "places"] = decimals;
+              }
+            }
+          }
+        }
+      
+        // Global logic for keys (excluding "comcu_" and "comdiss_") where description is not blank:
+        if (prefix !== "comcu_" && prefix !== "comdiss_") {
+          if ((("" + (comp[prefix + "description"] || "")).trim()) !== "") {
+            if (variable === "X") {
+              expected[prefix + "reportability"] = "Always Show";
+              expected[prefix + "classTranslation"] = "All Result";
+            } else if (variable === "Q") {
+              expected[prefix + "reportability"] = "Certificate";
+              if ((("" + (comp[prefix + "reportability"] || "")).trim()) === "Certificate") {
+                expected[prefix + "classTranslation"] = "All Result";
+              }
+            }
+          }
+        }
+      
+        // Global numeric extraction for all prefixes except "comtxt_"
+        if (prefix !== "comtxt_") {
+          var desc = comp[prefix + "description"] || "";
+          var unitRegex = /(mg\/ml|mg|%|ppm|ppb|μg|g?m\/ml|PERCENT|delta)/i;
+          var unitMatch = desc.match(unitRegex);
+          if (unitMatch) {
+            var unit = unitMatch[1].toLowerCase();
+            if (unit === "%") unit = "PERCENT";
+            expected[prefix + "units"] = unit;
+          }
+          var rangeRegex = /(\d+(?:\.\d+)?)(?:\s*\w+)?\s*(?:to|-)\s*(\d+(?:\.\d+)?)/i;
+          var rangeMatch = desc.match(rangeRegex);
+          if (rangeMatch) {
+            expected[prefix + "ruleTranslation"] = rangeMatch[1] + " <= Result <= " + rangeMatch[2];
+          } else {
+            var opMap = { LT: "<", MT: ">", NMT: "<=", NLT: ">=" };
+            var tokenFirstRegex = /(LT|MT|NMT|NLT)\s*(\d+(?:\.\d+)?)/i;
+            var tokenSecondRegex = /(\d+(?:\.\d+)?)[\s\S]*(LT|MT|NMT|NLT)/i;
+            var match1 = desc.match(tokenFirstRegex);
+            var match2 = desc.match(tokenSecondRegex);
+            if (match1) {
+              var token = match1[1].toUpperCase();
+              var numVal = match1[2];
+              var op = opMap[token] || "";
+              expected[prefix + "ruleTranslation"] = "Result " + op + " " + numVal;
+            } else if (match2) {
+              var numVal2 = match2[1];
+              var token2 = match2[2].toUpperCase();
+              var op2 = opMap[token2] || "";
+              expected[prefix + "ruleTranslation"] = numVal2 + " " + op2 + " Result";
+            }
+          }
+          var tokenRegex = /\b(?:LT|MT|NMT|NLT)\s*([\d]+(?:\.[\d]+)?)/i;
+          var tokenMatch = desc.match(tokenRegex);
+          if (tokenMatch) {
+            var numStr = tokenMatch[1];
+            var decimals = (numStr.indexOf('.') !== -1) ? numStr.split('.')[1].length : 0;
+            expected[prefix + "places"] = decimals;
+          } else {
+            var genericMatch = desc.match(/(\d+)(?:\.(\d+))?/);
+            if (genericMatch) {
+              var decimals = genericMatch[2] ? genericMatch[2].length : 0;
+              expected[prefix + "places"] = decimals;
+            }
+          }
+        }
+      
+        // For comtxt_ components, add special checks for component display text.
+        if (prefix === "comtxt_") {
+          var compDisp = (comp["comtxt_ComponentDisplay"] || "").trim().toLowerCase();
+          if (compDisp === "tamc-final") {
+            expected["comtxt_description"] = "Total Aerobic Microbial Count";
+          } else if (compDisp === "t&m-count") {
+            expected["comtxt_description"] = "Total Yeast and Mould";
+          }
+        }
+      
+        return expected;
+      }
+      
+      /*********************************
+       * 6) Rendering & Display
+       *********************************/
+      // Use Bootstrap responsive tables.
+      function getCommonKeys(arr, exclude) {
+        if (!Array.isArray(arr) || arr.length === 0) return [];
+        var keys = Object.keys(arr[0]);
+        keys = keys.filter(function(key) {
+          return (!exclude || exclude.indexOf(key) === -1) && arr.every(function(item) {
+            return item.hasOwnProperty(key);
+          });
+        });
+        // Ensure keys ending with "ComponentDisplay" come first.
+        var displayKeys = keys.filter(function(key) {
+          return key.toLowerCase().endsWith("componentdisplay");
+        });
+        var otherKeys = keys.filter(function(key) {
+          return !key.toLowerCase().endsWith("componentdisplay");
+        });
+        return displayKeys.concat(otherKeys);
+      }
+      
+      // When rendering table headers, strip the technical prefixes.
+      function renderTableHeaders(keys) {
+        var headerRow = "<tr>";
+        keys.forEach(function(key) {
+          headerRow += "<th>" + stripPrefix(key) + "</th>";
+        });
+        headerRow += "</tr>";
+        return headerRow;
+      }
+      
+      function fieldCell(actVal, expVal, fieldName, extraExpected) {
+        if (actVal === null || actVal === undefined) { actVal = ""; }
+        if (expVal === null || expVal === undefined) { expVal = ""; }
+        if (fieldName === "comcu_ComponentDisplay") {
+          return `
+            <div class="field-container">
+              <span class="actual-value"><span class='field-icon valid' onclick='toggleValidation(event)'>✔️</span> ${actVal}</span>
+            </div>
+          `;
+        }
+        let isValid;
+        if (fieldName === "comtxt_description" && (expVal === "Total Aerobic Microbial Count" || expVal === "Total Yeast and Mould")) {
+          isValid = actVal.indexOf(expVal) !== -1;
+        } else if (fieldName.toLowerCase().endsWith("componentdisplay")) {
+          isValid = (normalizeComponentName(actVal) === normalizeComponentName(expVal));
+        } else {
+          isValid = compareValues(actVal, expVal, false);
+        }
+        var iconHTML = "";
+        if (fieldName === "comrc_syntheticImpurity" && extraExpected && extraExpected["comrc_popupMessage"]) {
+          iconHTML = "<span class='field-icon' onclick='toggleValidation(event)'>⚠️ " + (isValid ? "✔️" : "❌") + "</span>";
+        } else {
+          iconHTML = isValid 
+            ? "<span class='field-icon valid' onclick='toggleValidation(event)'>✔️</span>"
+            : "<span class='field-icon invalid' onclick='toggleValidation(event)'>❌</span>";
+        }
+        var popupExtra = "";
+        if (fieldName === "comrc_syntheticImpurity" && extraExpected && extraExpected["comrc_popupMessage"]) {
+          popupExtra = " (Popup: " + extraExpected["comrc_popupMessage"] + ")";
+        }
+        return `
+          <div class="field-container">
+            <span class="actual-value">${iconHTML} ${actVal}</span>
+            <div class="field-popup">
+              <span class="expected-value">${expVal}${popupExtra}</span>
+            </div>
+          </div>
+        `;
+      }
+      
+      function toggleValidation(e) {
+        e.stopPropagation();
+        var iconSpan = $(e.target);
+        if (iconSpan.hasClass("valid")) { iconSpan.removeClass("valid").addClass("invalid").text("❌"); }
+        else { iconSpan.removeClass("invalid").addClass("valid").text("✔️"); }
+      }
+      
+      function renderSectionRow(title, actualObj, expectedObj, tableClass) {
+        var keys = Object.keys(actualObj).filter(function(k) { return !["category", "variable"].includes(k); });
+        var headerRow = renderTableHeaders(keys);
+        var valueRow = "<tr>";
+        keys.forEach(function(key) {
+          var actVal = actualObj[key] || "";
+          var expVal = expectedObj[key] || "";
+          valueRow += "<td>" + fieldCell(actVal, expVal, key, expectedObj) + "</td>";
+        });
+        valueRow += "</tr>";
+        return `
+          <div class="section mb-3">
+            <div class="section-title">${title}</div>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover ${tableClass}">
+                <thead>${headerRow}</thead>
+                <tbody>${valueRow}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+      
+      function renderTopBar(actualProd, expectedProd) {
+        var prodTitle = actualProd.pr_title || "Untitled Product";
+        var versionA = actualProd.pr_version || "";
+        var versionE = expectedProd.pr_version || "";
+        var isValid = compareValues(versionA, versionE, false);
+        var icon = isValid ? "✔️" : "❌";
+        var iconClass = isValid ? "valid" : "invalid";
+        return `
+          <div class="top-bar mb-3">
+            <div class="container-fluid">
+              <table class="w-100">
+                <tr>
+                  <td class="w-75"><h4>${prodTitle}</h4></td>
+                  <td class="w-25 text-right">
+                    <strong>Version:</strong> ${versionA}
+                    <span class='${iconClass}'>${icon}</span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+      
+      function renderOptimizedAnalysisSection(actualAnalyses, expectedAnalyses) {
+        if (!actualAnalyses || actualAnalyses.length === 0) return "";
+        var exclude = ["component", "category", "variable"];
+        var commonKeys = getCommonKeys(actualAnalyses, exclude);
+        var headerRow = renderTableHeaders(commonKeys);
+        var html = `<div class="section mb-3"><div class="section-title">Analysis</div>`;
+        for (var i = 0; i < actualAnalyses.length; i++) {
+          // For analyses with RC components, sort them so that RC components (based on comrc_ComponentDisplay) come first.
+          if ((actualAnalyses[i].ana_analysis || "").indexOf("RC") !== -1 &&
+              actualAnalyses[i].component && actualAnalyses[i].component.length > 0) {
+            actualAnalyses[i].component.sort(function(a, b) {
+              var aIsRC = a.comrc_ComponentDisplay ? 0 : 1;
+              var bIsRC = b.comrc_ComponentDisplay ? 0 : 1;
+              return aIsRC - bIsRC;
+            });
+          }
+          html += `<div class="section mb-3">`;
+          var analysisTitle = actualAnalyses[i].ana_analysisRepName || "";
+          var match = analysisTitle.match(/\(([^)]+)\)/);
+          if (match) analysisTitle = match[1];
+          html += `<div class="section-title">${analysisTitle}</div>`;
+          html += `<div class="table-responsive">
+                    <table class="table table-bordered table-sm analysis-table">
+                      <thead>${headerRow}</thead>
+                      <tbody><tr>`;
+          commonKeys.forEach(function(key) {
+            var actVal = actualAnalyses[i][key] || "";
+            var expVal = expectedAnalyses[i][key] || "";
+            html += `<td>${fieldCell(actVal, expVal, key, expectedAnalyses[i])}</td>`;
+          });
+          html += `</tr></tbody></table></div>`;
+          if (expectedAnalyses[i].missingComponentsError) {
+            html += `<div class="error-message">${expectedAnalyses[i].missingComponentsError}</div>`;
+          }
+          var subHeading = actualAnalyses[i].ana_analysis || "Components";
+          if (actualAnalyses[i].component && actualAnalyses[i].component.length > 0) {
+            var compKeys = getCommonKeys(actualAnalyses[i].component, []);
+            var compHeader = renderTableHeaders(compKeys);
+            html += `<div class="section mb-3"><div class="section-title">${subHeading}</div>
+                      <div class="table-responsive">
+                        <table class="table table-bordered table-sm components-table">
+                          <thead>${compHeader}</thead>
+                          <tbody>`;
+            for (var j = 0; j < actualAnalyses[i].component.length; j++) {
+              html += "<tr>";
+              for (var k = 0; k < compKeys.length; k++) {
+                var key = compKeys[k];
+                var actVal = actualAnalyses[i].component[j][key] || "";
+                var expVal = (expectedAnalyses[i].component && expectedAnalyses[i].component[j])
+                             ? expectedAnalyses[i].component[j][key]
+                             : "";
+                html += `<td>${fieldCell(actVal, expVal, key, expectedAnalyses[i].component[j])}</td>`;
+              }
+              html += "</tr>";
+            }
+            html += `</tbody></table></div></div>`;
+          }
+          html += "</div>";
+        }
+        html += "</div>";
+        return html;
+      }
+      
+      /*******************************************************
+       * Validation Block for Required Codes (Unchanged)
+       *******************************************************/
+      function validateRequiredCodes(expectedAnalyses, actualProd) {
+        var requiredCodes = [];
+        expectedAnalyses.forEach(function(expAnalysis) {
+          var repName = (expAnalysis.ana_analysisRepName || "").trim().toUpperCase();
+          if (repName === "DESCRIPTION" && expAnalysis.component) {
+            expAnalysis.component.forEach(function(comp) {
+              var compDesc = ((comp.comtxt_description || comp.description || "")).toLowerCase();
+              if (actualProd.category === "RM") {
+                if (compDesc.indexOf("powder") !== -1 && requiredCodes.indexOf("POWDER01X") === -1) { requiredCodes.push("POWDER01X"); }
+                if (compDesc.indexOf("crystalline") !== -1 && requiredCodes.indexOf("CRYSTAL01X") === -1) { requiredCodes.push("CRYSTAL01X"); }
+                if (compDesc.indexOf("odour") !== -1 && requiredCodes.indexOf("ODOUR01X") === -1) { requiredCodes.push("ODOUR01X"); }
+              } else if (actualProd.category === "FP") {
+                if (compDesc.indexOf("tablets") !== -1 && requiredCodes.indexOf("TABLET01X") === -1) { requiredCodes.push("TABLET01X"); }
+              } else if (actualProd.category === "HT") {
+                if (compDesc.indexOf("powder") !== -1 && requiredCodes.indexOf("POWDER01X") === -1) { requiredCodes.push("POWDER01X"); }
+                if (compDesc.indexOf("core tablet") !== -1 && requiredCodes.indexOf("UNCOTED01X") === -1) { requiredCodes.push("UNCOTED01X"); }
+                if (compDesc.indexOf("coated tablet") !== -1 && requiredCodes.indexOf("TABLET01X") === -1) { requiredCodes.push("TABLET01X"); }
+              }
+            });
+          }
+        });
+        var missingCodes = [];
+        requiredCodes.forEach(function(code) {
+          var exists = expectedAnalyses.some(function(ea) {
+            return (ea.ana_analysis || "").trim().toUpperCase() === code.toUpperCase();
+          });
+          if (!exists) missingCodes.push(code);
+        });
+        if (missingCodes.length > 0) {
+          expectedAnalyses.forEach(function(expAnalysis) {
+            var repName = (expAnalysis.ana_analysisRepName || "").trim().toUpperCase();
+            if (repName === "DESCRIPTION") { expAnalysis.ana_analysis = missingCodes.join(", "); }
+          });
+        }
+        return expectedAnalyses;
+      }
+      
+      function renderFullReport(actualProd, expectedProd, actualSampling, expectedSampling, actualAnalyses, expectedAnalyses) {
+        expectedAnalyses = validateRequiredCodes(expectedAnalyses, actualProd);
+        var report = "";
+        report += renderTopBar(actualProd, expectedProd);
+        report += renderSectionRow("Product Information", actualProd, expectedProd, "product-table");
+        report += renderSectionRow("Sampling Point Information", actualSampling, expectedSampling, "sampling-table");
+        report += renderOptimizedAnalysisSection(actualAnalyses, expectedAnalyses);
+        return report;
+      }
+      
+      /****************************************
+       * 7) Popup Appearance and Memory Cleanup
+       ****************************************/
+      $(document).on("mouseenter", ".field-container", function() {
+        var icon = $(this).find(".field-icon");
+        var popup = $(this).find(".field-popup");
+        if (icon.hasClass("valid")) {
+          popup.css({ "background-color": "green", "color": "white", "font-weight": "bold" });
+        } else {
+          popup.css({ "background-color": "red", "color": "white", "font-weight": "bold" });
+        }
+      });
+      window.onunload = function() { $(document).off(); };
+      
+      /****************************************
+       * 8) File Upload & Main processData()
+       ****************************************/
+      $(document).ready(function () {
+        $("#jsonFileInput").change(function (event) {
+          var file = event.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            try {
+              var jsonData = JSON.parse(e.target.result);
+              processData(jsonData);
+              console.log("Validation complete.");
+            } catch (error) {
+              console.error("JSON parse error:", error);
+              alert("Invalid JSON file!");
+            }
+          };
+          reader.readAsText(file);
+        });
+      });
+      
+      function processData(jsonData) {
+        var actualProduct = createActualProduct(jsonData);
+        var expectedProduct = createExpectedProduct(jsonData);
+        var actualSampling = createActualSamplingPoint(jsonData);
+        var expectedSampling = createExpectedSamplingPoint(jsonData, actualProduct.category);
+      
+        var actualAnalyses = [];
+        var expectedAnalyses = [];
+        if (jsonData.analysis && Array.isArray(jsonData.analysis)) {
+          jsonData.analysis.forEach(function(analysis) {
+            actualAnalyses.push(createActualAnalysis(analysis));
+            expectedAnalyses.push(createExpectedAnalysis(analysis, actualProduct.category, actualProduct.variable));
+          });
+        }
+      
+        var extractedPotency = extractTargetPotency(actualProduct.pr_title || "");
+        if (extractedPotency !== null) { console.log("Extracted Target Potency:", extractedPotency); }
+        var extractedCUVal = extractCU(actualProduct.pr_title || "");
+        if (extractedCUVal !== null) { console.log("Extracted CU:", extractedCUVal); }
+      
+        $("#reportContainer").show().html(
+          renderFullReport(actualProduct, expectedProduct, actualSampling, expectedSampling, actualAnalyses, expectedAnalyses)
+        );
+      }
+      
+      /********************************************
+       * 9) Robust Regress Function (Updated Universal)
+       ********************************************/
+      function robustRegress(value, expectedPlaces) {
+        if (value === null || value === undefined) return false;
+        const normalizedValue = String(value).replace(/\s/g, '');
+        if (!/^[-+]?\d+(\.\d+)?$/.test(normalizedValue)) { return false; }
+        if (typeof expectedPlaces === 'number' && expectedPlaces >= 0) {
+          let regex;
+          if (expectedPlaces === 0) { regex = /^[-+]?\d+$/; }
+          else { regex = new RegExp("^[-+]?\\d+\\.\\d{" + expectedPlaces + "}$"); }
+          return regex.test(normalizedValue);
+        }
+        return true;
+      }
+      
+    </script>      
+  </body>
+</html>
